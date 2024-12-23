@@ -9,8 +9,9 @@ function printSelected() {
 }
 
 function addPrintButton(someDiv) {
-	if (document.querySelector("#print-button"))
+	if (document.querySelector("#print-button")) {
 		return;
+	}
 
 	const printItem = document.createElement("div");
 	printItem.className = "item";
@@ -29,12 +30,13 @@ function addPrintButton(someDiv) {
 	printButton.addEventListener("click", () => {printSelected();});
 }
 
-const observer = new MutationObserver(function (mutations, mutationInstance) {
+// 
+const selectedObserver = new MutationObserver(function (mutations, mutationInstance) {
 	const selectedDiv = Array.from(document.querySelectorAll("div.item"))
 		.find(button => button.textContent.includes("Selected..."));
 	if (selectedDiv === undefined || selectedDiv.length === 0) {
 		return;
-	} else if (selectedDiv.length > 0) {
+	} else if (selectedDiv.length > 1) {
 		console.log("Too many 'Selected...' buttons found, aborting");
 		return;
 	}
@@ -42,7 +44,30 @@ const observer = new MutationObserver(function (mutations, mutationInstance) {
 	mutationInstance.disconnect();
 });
 
-observer.observe(document, {
-    childList: true,
-    subtree:   true
+selectedObserver.observe(document, {
+	childList: true,
+	subtree:   true
+});
+
+// Reconnect "Selected" observer on tab change
+const topMenuObserver = new MutationObserver(function (mutations, mutationInstance) {
+	const topMenuLink = Array.from(document.querySelectorAll("div#top-menu a"));
+	if (topMenuLink === undefined || topMenuLink.length === 0) {
+		return;
+	}
+
+	topMenuLink.forEach((item) => {
+		item.addEventListener("click", () => {
+			selectedObserver.observe(document, { // Reconnect observer
+				childList: true,
+				subtree:   true
+			});
+		});
+	});
+
+	mutationInstance.disconnect();
+});
+topMenuObserver.observe(document, {
+	childList: true,
+	subtree:   true
 });
