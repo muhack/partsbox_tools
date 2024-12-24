@@ -3,7 +3,7 @@
 	"name": "Partsbox Print Button",
 	"description": "Print current part or selected parts from Partsbox.",
 	"version": "0.1",
-	"permissions": ["activeTab", "scripting"],
+	"permissions": ["activeTab", "scripting", "nativeMessaging"],
 	"host_permissions": ["*://*.partsbox.io/*", "*://*.partsbox.com/*"],
 	"background": {
 		"service_worker": "background.js",
@@ -33,6 +33,12 @@
 				"default": "Ctrl+B",
 				"mac": "Command+B"
 			}
+		}
+	},
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "partsbox_printer@muhack.org",
+			"strict_min_version": "50.0"
 		}
 	}
 }
