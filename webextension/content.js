@@ -39,23 +39,36 @@ function waitForElm(selector, source = document) {
 				resolve(source.querySelector(selector));
 			}
 		});
-		if (source === document) {
-			observer.observe(document.body, {
-				childList: true,
-				subtree: true
-			});
-		} else {
-			observer.observe(source, {
-				childList: true,
-				subtree: true
-			});
+		observe_src = source === document ? document.body : source;
+		observer.observe(observe_src, {
+			childList: true,
+			subtree: true
+		});
+	});
+}
+// Wait for a specific element (not a selector) to disappear from the DOM
+function waitForNotElm(element) {
+	return new Promise(resolve => {
+		if (!document.body.contains(element)) {
+			return resolve();
 		}
+
+		const observer = new MutationObserver(mutations => {
+			if (!document.body.contains(element)) {
+				observer.disconnect();
+				resolve();
+			}
+		});
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
 	});
 }
 
 // Add "Print" button to the vertical menu under the "Selected" button
 function addPrintSelectedButton() {
-	waitForElm("div.right.menu:has(input)").then((rightMenu) => {
+	waitForElm("div.right.menu:has(div.button)").then((rightMenu) => {
 		waitForElm("div:has(div.button)", rightMenu).then((selectedButton) => {
 			selectedButton.addEventListener("click", (e) => {
 				if (document.querySelector("#print-selected"))
@@ -92,10 +105,23 @@ function addPrintSelectedButton() {
 		});
 	});
 }
-// Add onclick to top "Parts" tab button
-waitForElm("div#top-menu a[href*='parts']").then((partsTab) => {
-	partsTab.addEventListener("click", () => {
-		addPrintSelectedButton();
+
+let selectedButton
+waitForElm("div.right.menu:has(div.button)").then((e) => {
+	selectedButton = e;
+});
+// Add onclick to top "Parts" and "Storage" tab buttons
+waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
+	Array.from(document.querySelectorAll('div#top-menu>a[href*="parts"],a[href*="storage"]')).forEach((tab) => {
+		tab.addEventListener("click", () => {
+			// Wait for element to disappear and reappear (on new tab)
+			waitForNotElm(selectedButton).then(() => {
+				waitForElm('div.right.menu:has(div.button)').then((e) => {
+					selectedButton = e;
+					addPrintSelectedButton();
+				});
+			});
+		});
 	});
 });
 addPrintSelectedButton(); // Call once to add button on page load
