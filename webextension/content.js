@@ -27,20 +27,19 @@ function printSelected() {
 }
 
 // Taken from https://stackoverflow.com/a/61511955
-function waitForElm(selector, source = document) {
+function waitForElm(selector) {
 	return new Promise(resolve => {
-		if (source.querySelector(selector)) {
-			return resolve(source.querySelector(selector));
+		if (document.querySelector(selector)) {
+			return resolve(document.querySelector(selector));
 		}
 
 		const observer = new MutationObserver(mutations => {
-			if (source.querySelector(selector)) {
+			if (document.querySelector(selector)) {
 				observer.disconnect();
-				resolve(source.querySelector(selector));
+				resolve(document.querySelector(selector));
 			}
 		});
-		observe_src = source === document ? document.body : source;
-		observer.observe(observe_src, {
+		observer.observe(document.body, {
 			childList: true,
 			subtree: true
 		});
@@ -70,9 +69,8 @@ function waitForNotElm(element) {
 function addPrintSelectedButton() {
 	waitForElm("div.right.menu:has(div.button)>div:has(div.button)").then((selectedButton) => {
 		selectedButton.addEventListener("click", (e) => {
-			waitForElm("a.item", e.target.parentNode).then((firstVertMenuButton) => {
+			waitForElm("div.right.menu:has(div.button) a.item").then((firstVertMenuButton) => {
 				if (document.querySelector("#print-selected")) {
-					console.log("Print button already exists");
 					return;
 				}
 

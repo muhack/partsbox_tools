@@ -5,10 +5,6 @@
 	"version": "0.1",
 	"permissions": ["activeTab", "scripting", "nativeMessaging"],
 	"host_permissions": ["*://*.partsbox.io/*", "*://*.partsbox.com/*"],
-	"background": {
-		"service_worker": "background.js",
-		"scripts": ["background.js"]
-	},
 	"content_scripts": [{
 		"matches": ["*://*.partsbox.io/*", "*://*.partsbox.com/*"], 
 		"js": ["content.js"],
@@ -25,20 +21,6 @@
 			"32": "icon.png",
 			"48": "icon.png",
 			"128": "icon.png"
-		}
-	},
-	"commands": {
-		"_execute_action": {
-			"suggested_key": {
-				"default": "Ctrl+B",
-				"mac": "Command+B"
-			}
-		}
-	},
-	"browser_specific_settings": {
-		"gecko": {
-			"id": "partsbox_printer@muhack.org",
-			"strict_min_version": "50.0"
 		}
 	}
 }
