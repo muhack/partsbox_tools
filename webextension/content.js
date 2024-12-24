@@ -68,39 +68,40 @@ function waitForNotElm(element) {
 
 // Add "Print" button to the vertical menu under the "Selected" button
 function addPrintSelectedButton() {
-	waitForElm("div.right.menu:has(div.button)").then((rightMenu) => {
-		waitForElm("div:has(div.button)", rightMenu).then((selectedButton) => {
-			selectedButton.addEventListener("click", (e) => {
-				if (document.querySelector("#print-selected"))
+	waitForElm("div.right.menu:has(div.button)>div:has(div.button)").then((selectedButton) => {
+		selectedButton.addEventListener("click", (e) => {
+			waitForElm("a.item", e.target.parentNode).then((firstVertMenuButton) => {
+				if (document.querySelector("#print-selected")) {
+					console.log("Print button already exists");
 					return;
-				waitForElm("a.item", e.target.parentNode).then((firstVertMenuButton) => {
-					// Add "print" element before the first vertical menu button
-					const printHref = document.createElement("a");
-					printHref.className = "item";
-					printHref.addEventListener("click", () => {
-						printSelected();
-					});
-					printHref.id = "print-selected";
+				}
 
-					const printSpan = document.createElement("span");
-					printHref.appendChild(printSpan);
-
-					// Add icon to print entry
-					const icon = document.createElement("i");
-					icon.className = "icon";
-					printSpan.appendChild(icon);
-
-					const svg = document.createElement("svg");
-					svg.innerHTML = printerSvg;
-					icon.appendChild(svg);
-
-					// Add text to print entry
-					const text = document.createElement("span");
-					text.textContent = "Print";
-					printSpan.appendChild(text);
-
-					firstVertMenuButton.parentNode.insertBefore(printHref, firstVertMenuButton);
+				// Add "print" element before the first vertical menu button
+				const printHref = document.createElement("a");
+				printHref.id = "print-selected";
+				printHref.className = "item";
+				printHref.addEventListener("click", () => {
+					printSelected();
 				});
+				// Add straight away to avoid duplicate buttons
+				firstVertMenuButton.parentNode.insertBefore(printHref, firstVertMenuButton);
+
+				const printSpan = document.createElement("span");
+				printHref.appendChild(printSpan);
+
+				// Add icon to print entry
+				const icon = document.createElement("i");
+				icon.className = "icon";
+				printSpan.appendChild(icon);
+
+				const svg = document.createElement("svg");
+				svg.innerHTML = printerSvg;
+				icon.appendChild(svg);
+
+				// Add text to print entry
+				const text = document.createElement("span");
+				text.textContent = "Print";
+				printSpan.appendChild(text);
 			});
 		});
 	});
@@ -110,12 +111,12 @@ let selectedButton
 waitForElm("div.right.menu:has(div.button)").then((e) => {
 	selectedButton = e;
 });
+addPrintSelectedButton(); // Call once to add button on page load
 // Add onclick to top "Parts" and "Storage" tab buttons
 waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
 	Array.from(document.querySelectorAll('div#top-menu>a[href*="parts"],a[href*="storage"]')).forEach((tab) => {
 		tab.addEventListener("click", () => {
-			// Wait for element to disappear and reappear (on new tab)
-			waitForNotElm(selectedButton).then(() => {
+			waitForNotElm(selectedButton).then(() => { // Wait for element to disappear and reappear (on new tab)
 				waitForElm('div.right.menu:has(div.button)').then((e) => {
 					selectedButton = e;
 					addPrintSelectedButton();
@@ -124,37 +125,34 @@ waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
 		});
 	});
 });
-addPrintSelectedButton(); // Call once to add button on page load
 
 // Add "Print" button to the part page
 function addPrintPartButton() {
-	waitForElm("div.part-header").then((partHeader) => {
-		waitForElm("div.part-header-items", partHeader).then((idAnythingButton) => {
-			if (document.querySelector("#print-part"))
-				return;
-			const printButton = document.createElement("div");
-			printButton.className = "right floated ui tiny icon button";
-			printButton.id = "print-part";
-			printButton.addEventListener("click", () => {
-				sendURLs([window.location.href]);
-			});
-
-			// Add icon to print entry
-			const icon = document.createElement("i");
-			icon.className = "icon";
-			printButton.appendChild(icon);
-
-			const svg = document.createElement("svg");
-			svg.innerHTML = printerSvg;
-			icon.appendChild(svg);
-
-			// Add text to print entry
-			const text = document.createElement("span");
-			text.textContent = "Print";
-			printButton.appendChild(text);
-
-			idAnythingButton.parentNode.insertBefore(printButton, idAnythingButton);
+	waitForElm("div.part-header>div.part-header-items").then((idAnythingButton) => {
+		if (document.querySelector("#print-part"))
+			return;
+		const printButton = document.createElement("div");
+		printButton.className = "right floated ui tiny icon button";
+		printButton.id = "print-part";
+		printButton.addEventListener("click", () => {
+			sendURLs([window.location.href]);
 		});
+
+		// Add icon to print entry
+		const icon = document.createElement("i");
+		icon.className = "icon";
+		printButton.appendChild(icon);
+
+		const svg = document.createElement("svg");
+		svg.innerHTML = printerSvg;
+		icon.appendChild(svg);
+
+		// Add text to print entry
+		const text = document.createElement("span");
+		text.textContent = "Print";
+		printButton.appendChild(text);
+
+		idAnythingButton.parentNode.insertBefore(printButton, idAnythingButton);
 	});
 }
 addPrintPartButton();
