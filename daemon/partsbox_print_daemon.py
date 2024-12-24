@@ -59,6 +59,7 @@ def print_data(parts_data: list[dict], glabel_template_file: str, printer_name: 
 		# Clean up
 		print(f'[D] Done, cleaning up')
 		os.remove(f'{f.name}.pdf')
+		os.remove(f.name)
 
 class PartsboxAPI:
 	'''
