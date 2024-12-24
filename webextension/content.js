@@ -84,3 +84,40 @@ waitForElm("div#top-menu a[href*='parts']").then((partsTab) => {
 	});
 });
 addPrintSelectedButton(); // Call once to add button on page load
+
+// Add "Print" button to the part page
+function addPrintPartButton() {
+	console.log("addPrintPartButton");
+	waitForElm("div.part-header").then((partHeader) => {
+		console.log(partHeader);
+		waitForElm("div.part-header-items", partHeader).then((idAnythingButton) => {
+			console.log(idAnythingButton);
+			if (document.querySelector("#print-part"))
+				return;
+			const printButton = document.createElement("div");
+			printButton.className = "right floated ui tiny icon button";
+			printButton.id = "print-part";
+			printButton.addEventListener("click", () => {
+				console.log(window.location.href);
+			});
+
+			// Add icon to print entry
+			const icon = document.createElement("i");
+			icon.className = "icon";
+			printButton.appendChild(icon);
+
+			const svg = document.createElement("svg");
+			svg.innerHTML = printerSvg;
+			icon.appendChild(svg);
+
+			// Add text to print entry
+			const text = document.createElement("span");
+			text.textContent = "Print";
+			printButton.appendChild(text);
+
+			idAnythingButton.parentNode.insertBefore(printButton, idAnythingButton);
+		});
+	});
+}
+addPrintPartButton();
+
