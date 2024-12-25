@@ -4,84 +4,158 @@
 from functools import reduce
 import os
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from typing import TypeAlias
 
 import requests
 
 GLABELS_BIN = 'glabels-3-batch'
-GLABELS_PART_TEMPLATE = 'parts_template.glabels'
-GLABELS_PART_TEMPLATE_PATH = Path.cwd().parent / 'templates' / GLABELS_PART_TEMPLATE
 LPR_BIN = 'lpr'
-LPR_PRINTER = ''
+LPR_PRINTER = '' # TODO get this from some config file
 
-def print_data(parts_data: list[dict], glabel_template_file: str, printer_name: str = None): # type: ignore
+class Part:
 	'''
-	Generate a label and print it
-
-	:param param_data: Data to print
-	:param glabel_template_file: Path to the glabel template file
-	:param printer_name: Name of the printer to use (defaults to system default printer)
+	Class to represent a part
 	'''
-	# Create a temporary file to store the data
-	with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-		print(f'[D] Writing data to {f.name}')
-		f.write(','.join(list(map(lambda x: f"\"{x}\"", parts_data[0].keys()))))
-		for part_data in parts_data:
-			f.write('\n')
-			f.write(','.join(list(map(lambda x: f"\"{x}\"", part_data.values()))))
-		f.flush()
+	def __init__(self, url: str, part_id: str = ''):
+		if url == '' and part_id == '' or url != '' and part_id != '':
+			raise ValueError('Either URL or ID must be provided')
+		if url == '':
+			self.url: str = PartsboxAPI.get_IdAnything_url(part_id)
+			self.part_id: str = part_id
+		elif part_id == '':
+			self.url: str = url
+			self.part_id: str = self.get_part_id()
+		self.part_data: dict = pa.get_part_data(self.part_id)
 
-		# Generate the labels
-		print(f'[D] Generating labels to {f.name}.pdf')
-		glabels_args = [glabel_template_file, '-i', f.name, '-o', f'{f.name}.pdf']
-		try:
-			subprocess.run([GLABELS_BIN] + glabels_args, check=True, text=True, capture_output=True, timeout=10)
-		except subprocess.CalledProcessError as e:
-			print(f'[E] Could not generate labels: {e.stdout}, {e.stderr}')
-			return
+	def get_part_id(self) -> str:
+		'''
+		Get the part ID from a URL
+		'''
+		regex = r'partsbox.com\/.+?\/parts\/(\w{26})$'
+		m = re.search(regex, self.url)
+		if m:
+			return m.group(1)
+		raise ValueError(f'Could not get part ID from URL: {self.url}')
 
-		# Print the labels
-		print(f'[D] Printing labels')
-		if printer_name is None:
-			lpr_args = [f'{f.name}.pdf']
-		else:
-			lpr_args = ['-P', printer_name, f'{f.name}.pdf']
-		try:
-			result = subprocess.run([LPR_BIN] + lpr_args, check=True, text=True, capture_output=True)
-		except subprocess.CalledProcessError as e:
-			print(f'[E] Could not print labels: {e.stdout}, {e.stderr}')
-			return
+	def get_part_storage_id(self) -> str:
+		'''
+		Get the storage ID from part data
+		'''
+		return self.part_data.get('part/stock', [{}])[0].get('stock/storage-id', '')
 
-		# Clean up
-		print(f'[D] Done, cleaning up')
-		os.remove(f'{f.name}.pdf')
-		os.remove(f.name)
+	def get_part_total_stock(self) -> int:
+		'''
+		Get the total stock of a part across all storage locations
+		'''
+		return reduce(lambda x, y: x + y.get('stock/quantity'), self.part_data.get('part/stock', []), 0)
+
+	def get_csv_data(self) -> dict:
+		'''
+		Get data for a part like the CSV you can download from the website
+		Keys: Name, Description, Footprint, Manufacturer, MPN, Storage, Total Stock, URL, Meta-Parts
+		NOTE: Meta-Parts is not easily available through the API, it seems
+		'''
+
+		part_data = pa.get_part_data(self.part_id)
+		if not part_data:
+			raise ValueError(f'Could not get part data for ID: {self.part_id}')
+		storage_id = self.get_part_storage_id()
+		storage_name = ''
+		if storage_id:
+			storage = Storage(storage_id=storage_id)
+			storage_name = storage.get_storage_name()
+
+		return {
+			'Name': part_data.get('part/name', ''),
+			'Description': part_data.get('part/description', ''),
+			'Footprint': part_data.get('part/footprint', ''),
+			'Manufacturer': part_data.get('part/manufacturer', ''),
+			'MPN': part_data.get('part/mpn', ''),
+			'Storage': storage_name,
+			'Total Stock': self.get_part_total_stock(),
+			'URL': PartsboxAPI.get_IdAnything_url(self.part_id),
+			'Meta-Parts': '', # Sorry, no easy way to get this data with the API, it seems...
+		}
+	
+	@property
+	def template_path(self) -> str:
+		'''
+		Get the path to the glabels template for parts
+		'''
+		GLABELS_PART_TEMPLATE = 'partsbox_parts_template.glabels'
+		GLABELS_PART_TEMPLATE_PATH = Path.cwd().parent / 'templates' / GLABELS_PART_TEMPLATE
+		return GLABELS_PART_TEMPLATE_PATH.as_posix() # TODO get this from some config file
+
+class Storage:
+	'''
+	Class to represent a storage location
+	'''
+	def __init__(self, url: str = '', storage_id: str = ''):
+		if url == '' and storage_id == '' or url != '' and storage_id != '':
+			raise ValueError('Either URL or ID must be provided')
+		if url == '':
+			self.url = PartsboxAPI.get_IdAnything_url(storage_id)
+			self.storage_id = storage_id
+		elif storage_id == '':
+			self.url = url
+			self.storage_id = self.get_storage_id()
+		self.storage_data: dict = pa.get_storage_data(self.storage_id)
+
+	def get_storage_id(self) -> str:
+		'''
+		Get the storage ID from a URL
+		'''
+		regex = r'partsbox.com\/.+?\/location\/(\w{26})$'
+		m = re.search(regex, self.url)
+		if m:
+			return m.group(1)
+		raise ValueError(f'Could not get storage ID from URL: {self.url}')
+
+	def get_csv_data(self) -> dict:
+		'''
+		Get data for a storage location
+		Keys: Name, Shortname, URL
+		NOTE: Shortname is the part of the name after the last hyphen
+		'''
+
+		return {
+			'Name': self.get_storage_name(),
+			'Shortname': self.get_storage_name().split('-')[-1],
+			'URL': PartsboxAPI.get_IdAnything_url(self.storage_id),
+		}
+
+	def get_storage_name(self) -> str:
+		'''
+		Get the name of a storage location
+		'''
+		return self.storage_data.get('storage/name', '')
+	
+	@property
+	def template_path(self) -> str:
+		'''
+		Get the path to the glabels template for storage locations
+		'''
+		GLABELS_STORAGE_TEMPLATE = 'partsbox_storage_template.glabels'
+		GLABELS_STORAGE_TEMPLATE_PATH = Path.cwd().parent / 'templates' / GLABELS_STORAGE_TEMPLATE
+		return GLABELS_STORAGE_TEMPLATE_PATH.as_posix() # TODO get this from some config file
+
+Entity: TypeAlias = Part|Storage
 
 class PartsboxAPI:
 	'''
 	Class to interact with the Partsbox API
 	'''
 	@staticmethod
-	def get_part_id(part_url: str) -> str|None:
+	def get_IdAnything_url(id: str) -> str:
 		'''
-		Get the part ID from a URL
+		Get the IDAnything URL for a part, location, etc.
 		'''
-		regex = r'partsbox.com\/.+?\/parts\/(\w{26})'
-		m = re.search(regex, part_url)
-		if m:
-			return m.group(1)
-		return None
-
-	@staticmethod
-	def get_part_IdAnything_url(part_id: str) -> str:
-		'''
-		Get the URL for a part
-		'''
-		return f'https://partsbox.com/I{part_id}'
+		return f'https://partsbox.com/I{id}'
 
 	def __init__(self, api_key):
 		headers = {
@@ -100,18 +174,6 @@ class PartsboxAPI:
 		r = self.s.post('https://api.partsbox.com/api/1/part/get', json=json_data, timeout=5)
 		return r.json().get('data')
 
-	def get_part_storage_id(self, part_data: dict) -> str|None:
-		'''
-		Get the storage ID from part data
-		'''
-		return part_data.get('part/stock', [{}])[0].get('stock/storage-id')
-
-	def get_part_total_stock(self, part_data: dict) -> int:
-		'''
-		Get the total stock of a part
-		'''
-		return reduce(lambda x, y: x + y.get('stock/quantity'), part_data.get('part/stock', []), 0)
-
 	def get_storage_data(self, storage_id: str|None) -> dict|None:
 		'''
 		Get data for a single storage location
@@ -123,38 +185,6 @@ class PartsboxAPI:
 		}
 		r = self.s.post('https://api.partsbox.com/api/1/storage/get', json=json_data, timeout=5)
 		return r.json().get('data')
-
-	def get_storage_name(self, storage_data: dict|None) -> str|None:
-		'''
-		Get the name of a storage location
-		'''
-		if storage_data is None:
-			return None
-		return storage_data.get('storage/name')
-
-	def get_part_csv_data(self, part_id: str) -> dict|None:
-		'''
-		Get data for a part like the CSV you can download from the website
-		'''
-		part_data = self.get_part_data(part_id)
-		print(part_data)
-		if not part_data:
-			return None
-		storage_id = self.get_part_storage_id(part_data)
-		storage_data = self.get_storage_data(storage_id)
-		storage_name = self.get_storage_name(storage_data)
-
-		return {
-			'Name': part_data.get('part/name', ''),
-			'Description': part_data.get('part/description', ''),
-			'Footprint': part_data.get('part/footprint', ''),
-			'Manufacturer': part_data.get('part/manufacturer', ''),
-			'MPN': part_data.get('part/mpn', ''),
-			'Storage': '' if storage_name is None else storage_name,
-			'Total Stock': self.get_part_total_stock(part_data),
-			'URL': PartsboxAPI.get_part_IdAnything_url(part_id),
-			'Meta-Parts': '', # Sorry, no easy way to get this data with the API, it seems...
-		}
 
 class PartsboxPrinterReqHandler(BaseHTTPRequestHandler):
 	'''
@@ -188,45 +218,101 @@ class PartsboxPrinterReqHandler(BaseHTTPRequestHandler):
 		dataLength = int(self.headers['Content-Length'])
 		data = self.rfile.read(dataLength)
 
-		# Parse the JSON data
-		data = json.loads(data.decode('utf-8'))
-		if type(data) != list:
-			print(f'[E] Expected a list of urls, got {type(data)} ({data:20}...)')
-			response = {}
-			response['status'] = 'ERROR'
+		# Parse the JSON data and prepare the response
+		response = {}
+		data_decoded = json.loads(data.decode('utf-8'))
+		if not isinstance(data_decoded, list):
+			print(f'[E] Expected a list of urls, got {type(data_decoded)} ({data_decoded:20}...)')
+			response['status'] = 'Not Acceptable'
 			response['message'] = 'Expected a list of URLs'
 			self.send_dict_response(response)
 			return
-
-		response = {}
 		response['status'] = 'OK'
 		self.send_dict_response(response)
 
-		# Process the URLs
-		parts_csv_data = []
-		for url in data:
-			print(f'[D] Processing URL: {url}')
-			part_id = PartsboxAPI.get_part_id(url)
-			if not part_id:
-				print('[E] Could not get part ID')
-				continue
+		parts_csv_data = process_urls(data_decoded)
+		print_data(parts_csv_data)
 
-			part_csv_data = pa.get_part_csv_data(part_id)
-			if not part_csv_data:
-				print(f'[E] Could not get part data for ID: {part_id}. Aborting.')
-				continue
-			parts_csv_data.append(part_csv_data)
+def process_urls(urls: list[str]) -> list[Entity]:
+	'''
+	Process a list of URLs and returns a list of dictionaries with data
+	that can be consumed by the glabels templates.
+	Links must be all of the same type (for glabels to work)
+	'''
+	entities: list[Part|Storage] = []
+	for url in urls:
+		print(f'[D] Processing URL: {url}')
 
-		print_data(parts_csv_data, GLABELS_PART_TEMPLATE_PATH.as_posix())
+		entity: Part|Storage = None # type: ignore
+		if '/parts/' in url:
+			entity = Part(url)
+		elif '/location/' in url:
+			entity = Storage(url)
+		else:
+			raise ValueError(f'URL is neither a part nor a storage location ({url})')
+		entities.append(entity)
+	
+	return entities
 
-PORT = 9581
+def print_data(entities: list[Entity], printer_name: str = None): # type: ignore
+	'''
+	Generate a label and print it
+
+	:param param_data: Entities to print (must be all of the same type)
+	:param printer_name: Name of the printer to use (defaults to system default printer)
+	'''
+	if not entities:
+		print('[E] No data to print')
+		return
+	if not all(isinstance(entity, type(entities[0])) for entity in entities):
+		raise ValueError('All entities must be of the same type')
+	
+	parts_data = [entity.get_csv_data() for entity in entities]
+	template_file = entities[0].template_path
+
+	# Create a temporary file to store the data
+	with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+		print(f'[D] Writing data to {f.name}')
+		f.write(','.join(list(map(lambda x: f"\"{x}\"", parts_data[0].keys()))))
+		for part_data in parts_data:
+			f.write('\n')
+			f.write(','.join(list(map(lambda x: f"\"{x}\"", part_data.values()))))
+		f.flush()
+
+		# Generate the labels
+		print(f'[D] Generating labels to {f.name}.pdf')
+		glabels_args = [template_file, '-i', f.name, '-o', f'{f.name}.pdf']
+		try:
+			subprocess.run([GLABELS_BIN] + glabels_args, check=True, text=True, capture_output=True, timeout=10)
+		except subprocess.CalledProcessError as e:
+			print(f'[E] Could not generate labels: {e.stdout}, {e.stderr}')
+			return
+
+		# Print the labels
+		print(f'[D] Printing labels')
+		if printer_name is None:
+			lpr_args = [f'{f.name}.pdf']
+		else:
+			lpr_args = ['-P', printer_name, f'{f.name}.pdf']
+		try:
+			result = subprocess.run([LPR_BIN] + lpr_args, check=True, text=True, capture_output=True)
+		except subprocess.CalledProcessError as e:
+			print(f'[E] Could not print labels: {e.stdout}, {e.stderr}')
+			return
+
+		# Clean up
+		print(f'[D] Done, cleaning up')
+		os.remove(f'{f.name}.pdf')
+		os.remove(f.name)
+
+PORT = 9581 # TODO get this from some config file
 pa: PartsboxAPI = None # type: ignore
 
-def main() -> int:
+def main():
 	global pa
 	apikey = os.environ['PARTSBOX_API_KEY']
 	if not apikey:
-		raise Exception('PARTSBOX_API_KEY not set in environment')
+		raise OSError('PARTSBOX_API_KEY not set in environment')
 	pa = PartsboxAPI(apikey)
 
 	print('Starting server')
@@ -235,4 +321,4 @@ def main() -> int:
 	httpd.serve_forever()
 
 if __name__ == '__main__':
-	exit(main())
+	main()

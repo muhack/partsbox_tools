@@ -16,11 +16,21 @@ function sendURLs(urls) {
 
 function printSelected() {
 	const selected = Array.from(document.querySelectorAll('tr:has(input:not([id="all"]):checked)'));
-	urls = [];
+	const href_regex_parts = new RegExp(/.*?\/parts(?:\/|)$/);
+	const href_regex_storage = new RegExp(/.*?\/storage(?:\/|)$/);
+	let link_regex;
+	if (window.location.href.match(href_regex_parts)) {
+		link_regex = new RegExp(/.*?\/parts\/\w{26}$/);
+	} else if (window.location.href.match(href_regex_storage)) {
+		link_regex = new RegExp(/.*?\/location\/\w{26}$/);
+	} else {
+		console.log("Unknown page type when trying to print selected parts");
+		return;
+	}
+	let urls = [];
 	selected.forEach((item) => {
 		let partLinks = Array.from(item.querySelectorAll('a'));
-		let url = partLinks.filter(part => part.href.includes("/parts/") && !part.href.includes("/parts/o/"))
-			.map(part => part.href)
+		let url = partLinks.filter(part => link_regex.test(part.href)).map(part => part.href)
 		urls = urls.concat(url);
 	});
 	sendURLs(urls);
@@ -126,7 +136,7 @@ waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
 
 // Add "Print" button to the part page
 function addPrintPartButton() {
-	waitForElm("div.part-header>div.part-header-items").then((idAnythingButton) => {
+	waitForElm("div.id-anything").then((idAnythingButton) => {
 		if (document.querySelector("#print-part"))
 			return;
 		const printButton = document.createElement("div");
@@ -150,8 +160,7 @@ function addPrintPartButton() {
 		text.textContent = "Print";
 		printButton.appendChild(text);
 
-		idAnythingButton.parentNode.insertBefore(printButton, idAnythingButton);
+		idAnythingButton.parentNode.appendChild(printButton); // Print to the right of the ID-Anything button
 	});
 }
 addPrintPartButton();
-
