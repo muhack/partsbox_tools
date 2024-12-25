@@ -135,7 +135,7 @@ waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
 });
 
 // Add "Print" button to the part page
-function addPrintPartButton() {
+function addPrintEntityButton() {
 	waitForElm("div.id-anything").then((idAnythingButton) => {
 		if (document.querySelector("#print-part"))
 			return;
@@ -163,4 +163,6 @@ function addPrintPartButton() {
 		idAnythingButton.parentNode.appendChild(printButton); // Print to the right of the ID-Anything button
 	});
 }
-addPrintPartButton();
+addPrintEntityButton();
+// Listen for URL changes and call addPrintPartButton on each new page
+window.navigation.addEventListener("navigate", addPrintEntityButton);
