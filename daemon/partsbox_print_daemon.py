@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from functools import reduce
+import argparse
+import configparser
 import os
 import json
 import re
 import subprocess
 import tempfile
+from functools import reduce
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import TypeAlias
@@ -15,7 +17,6 @@ import requests
 
 GLABELS_BIN = 'glabels-3-batch'
 LPR_BIN = 'lpr'
-LPR_PRINTER = '' # TODO get this from some config file
 
 class Part:
 	'''
@@ -87,9 +88,9 @@ class Part:
 		'''
 		Get the path to the glabels template for parts
 		'''
-		GLABELS_PART_TEMPLATE = 'partsbox_parts_template.glabels'
-		GLABELS_PART_TEMPLATE_PATH = Path.cwd().parent / 'templates' / GLABELS_PART_TEMPLATE
-		return GLABELS_PART_TEMPLATE_PATH.as_posix() # TODO get this from some config file
+		template_file = config.get('DEFAULT', 'GLABELS_PART_TEMPLATE')
+		template_path = Path.cwd() / 'templates' / template_file
+		return template_path.as_posix()
 
 class Storage:
 	'''
@@ -140,9 +141,9 @@ class Storage:
 		'''
 		Get the path to the glabels template for storage locations
 		'''
-		GLABELS_STORAGE_TEMPLATE = 'partsbox_storage_template.glabels'
-		GLABELS_STORAGE_TEMPLATE_PATH = Path.cwd().parent / 'templates' / GLABELS_STORAGE_TEMPLATE
-		return GLABELS_STORAGE_TEMPLATE_PATH.as_posix() # TODO get this from some config file
+		template_file = config.get('DEFAULT', 'GLABELS_STORAGE_TEMPLATE')
+		template_path = Path.cwd() / 'templates' / template_file
+		return template_path.as_posix()
 
 Entity: TypeAlias = Part|Storage
 
@@ -254,7 +255,7 @@ def process_urls(urls: list[str]) -> list[Entity]:
 	
 	return entities
 
-def print_data(entities: list[Entity], printer_name: str = None): # type: ignore
+def print_data(entities: list[Entity]):
 	'''
 	Generate a label and print it
 
@@ -288,36 +289,66 @@ def print_data(entities: list[Entity], printer_name: str = None): # type: ignore
 			print(f'[E] Could not generate labels: {e.stdout}, {e.stderr}')
 			return
 
-		# Print the labels
-		print(f'[D] Printing labels')
-		if printer_name is None:
-			lpr_args = [f'{f.name}.pdf']
+		if args.dry_run:
+			# Open the PDF in a viewer
+			print('[D] Opening PDF in viewer')
+			try:
+				subprocess.run(['xdg-open', f'{f.name}.pdf'], check=True)
+			except subprocess.CalledProcessError as e:
+				print(f'[E] Could not open PDF in viewer: {e.stdout}, {e.stderr}')
+				return
+			input('Press Enter when done...')
 		else:
-			lpr_args = ['-P', printer_name, f'{f.name}.pdf']
-		try:
-			result = subprocess.run([LPR_BIN] + lpr_args, check=True, text=True, capture_output=True)
-		except subprocess.CalledProcessError as e:
-			print(f'[E] Could not print labels: {e.stdout}, {e.stderr}')
-			return
+			# Print the labels
+			print('[D] Printing labels')
+			printer_name = config.get('DEFAULT', 'LPR_PRINTER')
+			if printer_name is None:
+				lpr_args = [f'{f.name}.pdf']
+			else:
+				lpr_args = ['-P', printer_name, f'{f.name}.pdf']
+			try:
+				subprocess.run([LPR_BIN] + lpr_args, check=True, text=True, capture_output=True)
+			except subprocess.CalledProcessError as e:
+				print(f'[E] Could not print labels: {e.stdout}, {e.stderr}')
+				return
 
 		# Clean up
-		print(f'[D] Done, cleaning up')
+		print('[D] Done, cleaning up')
 		os.remove(f'{f.name}.pdf')
 		os.remove(f.name)
 
-PORT = 9581 # TODO get this from some config file
 pa: PartsboxAPI = None # type: ignore
+config: configparser.ConfigParser = None # type: ignore
+args: argparse.Namespace = None # type: ignore
+
+def parse_args():
+	parser = argparse.ArgumentParser(description='Partsbox Print Daemon')
+	parser.add_argument('config', type=str, help='Path to the configuration file')
+	parser.add_argument('--dry-run', action='store_true', help='Run the daemon in dry-run mode (open resulting PDFs in viewer)')
+	return parser.parse_args()
+
+def load_config(config_path):
+	config = configparser.ConfigParser()
+	config.read(config_path)
+	return config
 
 def main():
 	global pa
-	apikey = os.environ['PARTSBOX_API_KEY']
+	global config
+	global args
+
+	args = parse_args()
+	config = load_config(args.config)
+
+	apikey = os.environ.get('PARTSBOX_API_KEY')
 	if not apikey:
 		raise OSError('PARTSBOX_API_KEY not set in environment')
 	pa = PartsboxAPI(apikey)
 
+	port = config.getint('DEFAULT', 'PORT', fallback=9581)
 	print('Starting server')
-	httpd = HTTPServer(('127.0.0.1', PORT), PartsboxPrinterReqHandler)
-	print(f'Hosting server on port {PORT}')
+	httpd = HTTPServer(('127.0.0.1', port), PartsboxPrinterReqHandler)
+	print(f'Hosting server on port {port}')
 	httpd.serve_forever()
 
 if __name__ == '__main__':
