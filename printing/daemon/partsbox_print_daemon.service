@@ -1,0 +1,11 @@
+[Unit]
+Description=Partsbox print daemon
+
+[Service]
+Type=simple
+WorkingDirectory=<DIRECTORY>
+ExecStart=/usr/bin/python3 <DIRECTORY>/partsbox_print_daemon.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

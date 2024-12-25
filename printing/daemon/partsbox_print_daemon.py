@@ -82,7 +82,7 @@ class Part:
 			'URL': PartsboxAPI.get_IdAnything_url(self.part_id),
 			'Meta-Parts': '', # Sorry, no easy way to get this data with the API, it seems...
 		}
-	
+
 	@property
 	def template_path(self) -> str:
 		'''
@@ -135,7 +135,7 @@ class Storage:
 		Get the name of a storage location
 		'''
 		return self.storage_data.get('storage/name', '')
-	
+
 	@property
 	def template_path(self) -> str:
 		'''
@@ -152,11 +152,11 @@ class PartsboxAPI:
 	Class to interact with the Partsbox API
 	'''
 	@staticmethod
-	def get_IdAnything_url(id: str) -> str:
+	def get_IdAnything_url(entity_id: str) -> str:
 		'''
 		Get the IDAnything URL for a part, location, etc.
 		'''
-		return f'https://partsbox.com/I{id}'
+		return f'https://partsbox.com/I{entity_id}'
 
 	def __init__(self, api_key):
 		headers = {
@@ -165,7 +165,7 @@ class PartsboxAPI:
 		self.s = requests.Session()
 		self.s.headers.update(headers)
 
-	def get_part_data(self, part_id) -> dict|None:
+	def get_part_data(self, part_id) -> dict:
 		'''
 		Get single part data
 		'''
@@ -173,19 +173,19 @@ class PartsboxAPI:
 			'part/id': part_id,
 		}
 		r = self.s.post('https://api.partsbox.com/api/1/part/get', json=json_data, timeout=5)
-		return r.json().get('data')
+		return r.json().get('data', {})
 
-	def get_storage_data(self, storage_id: str|None) -> dict|None:
+	def get_storage_data(self, storage_id: str|None) -> dict:
 		'''
 		Get data for a single storage location
 		'''
 		if storage_id is None:
-			return None
+			return {}
 		json_data = {
 			'storage/id': storage_id,
 		}
 		r = self.s.post('https://api.partsbox.com/api/1/storage/get', json=json_data, timeout=5)
-		return r.json().get('data')
+		return r.json().get('data', {})
 
 class PartsboxPrinterReqHandler(BaseHTTPRequestHandler):
 	'''
@@ -267,7 +267,7 @@ def print_data(entities: list[Entity]):
 		return
 	if not all(isinstance(entity, type(entities[0])) for entity in entities):
 		raise ValueError('All entities must be of the same type')
-	
+
 	parts_data = [entity.get_csv_data() for entity in entities]
 	template_file = entities[0].template_path
 
@@ -323,14 +323,14 @@ args: argparse.Namespace = None # type: ignore
 
 def parse_args():
 	parser = argparse.ArgumentParser(description='Partsbox Print Daemon')
-	parser.add_argument('config', type=str, help='Path to the configuration file')
-	parser.add_argument('--dry-run', action='store_true', help='Run the daemon in dry-run mode (open resulting PDFs in viewer)')
+	parser.add_argument('-c', '--config', type=str, help='Path to the configuration file (default: config.ini)', default='config.ini')
+	parser.add_argument('-d', '--dry-run', action='store_true', help='Run the daemon in dry-run mode (open resulting PDFs in default viewer)')
 	return parser.parse_args()
 
 def load_config(config_path):
-	config = configparser.ConfigParser()
-	config.read(config_path)
-	return config
+	conf = configparser.ConfigParser()
+	conf.read(config_path)
+	return conf
 
 def main():
 	global pa
