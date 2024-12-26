@@ -4,12 +4,15 @@ straight from your browser with a single click.
 
 ## Architecture
 This project is made of two parts:
-- A WebExtension that sends data to the daemon, and adds two buttons to the
+- A WebExtension that sends data to the daemon, and adds three buttons to the
   [PartsBox](https://partsbox.com) website interface:
 	- One on a part/storage location page to print a single label
 		![Print single label](./images/print_single_button.png)
 	- One on the list of parts to print labels for multiple parts in batch
 		![Print selected labels](./images/print_selected_button.png)
+	- One on the list of parts within a storage location to print labels for
+	  multiple parts in batch
+		![Print selected labels](./images/print_location_selected_button.png)
 
 - A daemon that listens for requests from the extension, generates the labels
   from a template with `glabels-3-batch`, and sends them to the label printer
@@ -23,7 +26,7 @@ This project is made of two parts:
 	- Eurostile LT Std font - or change the template
 - Python 3
 	- requests (`pip install requests`)
-- Chrome
+- Firefox/Chrome
 
 
 ### Hardware
@@ -44,14 +47,12 @@ This was developed on Linux. The extension and most of the daemon should work
 on Windows and MacOS, but the printing part will need to be adapted: `glabels`
 is available on all platforms, but `lpr` is not.
 
-The extension only works on **Chrome**, so far.
-
 ## Installation
 ### Extension
-Go to the
-[Chrome web store](https://chrome.google.com/webstore/detail/kdgkmaimjhjphiecnoneiecdgpddhdbp)
-and install the extension, or clone this repository and load the unpacked
-extension in Chrome (enable developer mode in `chrome://extensions`).
+Get the
+[Firefox add-on](https://addons.mozilla.org/en-US/firefox/addon/partsbox-print/),
+the [Chrome extension](https://chrome.google.com/webstore/detail/kdgkmaimjhjphiecnoneiecdgpddhdbp)
+or clone this repository and load the unpacked extension in your browser.
 
 ### Configure lprint
 ```bash
@@ -113,8 +114,3 @@ generate the label and display it in your default pdf viewer.
 $ export PARTSBOX_API_KEY=<SECRET_API_KEY>
 $ python3 partsbox_print_daemon.py --dry-run
 ```
-
-## TODO
-- [ ] Port extension to Firefox
-- [ ] Publish on Chrome/Firefox store
-- [ ] Add systemctl service for the daemon

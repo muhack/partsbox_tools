@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Partsbox Print Button",
 	"description": "Print entities to label directly from Partsbox web UI.",
-	"version": "0.1",
+	"version": "0.2",
 	"permissions": [],
 	"host_permissions": ["*://*.partsbox.io/*", "*://*.partsbox.com/*"],
 	"content_scripts": [{
@@ -21,6 +21,11 @@
 			"32": "icon.png",
 			"48": "icon.png",
 			"128": "icon.png"
+		}
+	},
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "partsbox-print-ff@ceres-c.it"
 		}
 	}
 }

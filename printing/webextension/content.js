@@ -17,9 +17,11 @@ function sendURLs(urls) {
 function printSelected() {
 	const selected = Array.from(document.querySelectorAll('tr:has(input:not([id="all"]):checked)'));
 	const href_regex_parts = new RegExp(/.*?\/parts(?:\/|)$/);
+	const href_regex_location = new RegExp(/.*?\/location\/\w{26}$/);
 	const href_regex_storage = new RegExp(/.*?\/storage(?:\/|)$/);
 	let link_regex;
-	if (window.location.href.match(href_regex_parts)) {
+	if (window.location.href.match(href_regex_parts) || window.location.href.match(href_regex_location)) {
+		// Locations contain parts, so we need to check for both
 		link_regex = new RegExp(/.*?\/parts\/\w{26}$/);
 	} else if (window.location.href.match(href_regex_storage)) {
 		link_regex = new RegExp(/.*?\/location\/\w{26}$/);
@@ -55,84 +57,52 @@ function waitForElm(selector) {
 		});
 	});
 }
-// Wait for a specific element (not a selector) to disappear from the DOM
-function waitForNotElm(element) {
-	return new Promise(resolve => {
-		if (!document.body.contains(element)) {
-			return resolve();
-		}
 
-		const observer = new MutationObserver(mutations => {
-			if (!document.body.contains(element)) {
-				observer.disconnect();
-				resolve();
-			}
+function onSelectedClick() {
+	waitForElm("div.ui.secondary.small.vertical.menu>a.item").then((firstVertMenuButton) => {
+		if (document.querySelector("#print-selected"))
+			return;
+
+		// Add "print" element before the first vertical menu button
+		const printHref = document.createElement("a");
+		printHref.id = "print-selected";
+		printHref.className = "item";
+		printHref.addEventListener("click", () => {
+			printSelected();
 		});
-		observer.observe(document.body, {
-			childList: true,
-			subtree: true
-		});
+		// Add straight away to avoid duplicate buttons
+		firstVertMenuButton.parentNode.insertBefore(printHref, firstVertMenuButton);
+
+		const printSpan = document.createElement("span");
+		printHref.appendChild(printSpan);
+
+		// Add icon to print entry
+		const icon = document.createElement("i");
+		icon.className = "icon";
+		printSpan.appendChild(icon);
+
+		const svg = document.createElement("svg");
+		svg.innerHTML = printerSvg;
+		icon.appendChild(svg);
+
+		// Add text to print entry
+		const text = document.createElement("span");
+		text.textContent = "Print";
+		printSpan.appendChild(text);
 	});
 }
 
 // Add "Print" button to the vertical menu under the "Selected" button
 function addPrintSelectedButton() {
 	waitForElm("div.right.menu:has(div.button)>div:has(div.button)").then((selectedButton) => {
-		selectedButton.addEventListener("click", (e) => {
-			waitForElm("div.right.menu:has(div.button) a.item").then((firstVertMenuButton) => {
-				if (document.querySelector("#print-selected")) {
-					return;
-				}
-
-				// Add "print" element before the first vertical menu button
-				const printHref = document.createElement("a");
-				printHref.id = "print-selected";
-				printHref.className = "item";
-				printHref.addEventListener("click", () => {
-					printSelected();
-				});
-				// Add straight away to avoid duplicate buttons
-				firstVertMenuButton.parentNode.insertBefore(printHref, firstVertMenuButton);
-
-				const printSpan = document.createElement("span");
-				printHref.appendChild(printSpan);
-
-				// Add icon to print entry
-				const icon = document.createElement("i");
-				icon.className = "icon";
-				printSpan.appendChild(icon);
-
-				const svg = document.createElement("svg");
-				svg.innerHTML = printerSvg;
-				icon.appendChild(svg);
-
-				// Add text to print entry
-				const text = document.createElement("span");
-				text.textContent = "Print";
-				printSpan.appendChild(text);
-			});
-		});
+		selectedButton.addEventListener("click", onSelectedClick);
 	});
 }
-
-let selectedButton
-waitForElm("div.right.menu:has(div.button)").then((e) => {
-	selectedButton = e;
-});
-addPrintSelectedButton(); // Call once to add button on page load
-// Add onclick to top "Parts" and "Storage" tab buttons
-waitForElm("div#top-menu>a[href*='parts']").then((partsTab) => {
-	Array.from(document.querySelectorAll('div#top-menu>a[href*="parts"],a[href*="storage"]')).forEach((tab) => {
-		tab.addEventListener("click", () => {
-			waitForNotElm(selectedButton).then(() => { // Wait for element to disappear and reappear (on new tab)
-				waitForElm('div.right.menu:has(div.button)').then((e) => {
-					selectedButton = e;
-					addPrintSelectedButton();
-				});
-			});
-		});
+function addPrintSelectedFromStorageButton() {
+	waitForElm('div.ui.segment div.flexheader div.ui.tiny.button').then((selectedButton) => {
+		selectedButton.addEventListener("click", onSelectedClick);
 	});
-});
+}
 
 // Add "Print" button to the part page
 function addPrintEntityButton() {
@@ -163,6 +133,14 @@ function addPrintEntityButton() {
 		idAnythingButton.parentNode.appendChild(printButton); // Print to the right of the ID-Anything button
 	});
 }
-addPrintEntityButton();
-// Listen for URL changes and call addPrintPartButton on each new page
-window.navigation.addEventListener("navigate", addPrintEntityButton);
+
+// Register an observer to add buttons whenever the page changes
+const observer = new MutationObserver(() => {
+	addPrintEntityButton();
+	addPrintSelectedButton();
+	addPrintSelectedFromStorageButton();
+});
+observer.observe(document.body, {
+	childList: true,
+	subtree: true
+});
