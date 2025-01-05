@@ -101,6 +101,10 @@ And finally, **enable and start** the service.
 $ systemctl --user enable --now partsbox_print_daemon.service
 ```
 
+### Deamon configuration
+The daemon uses a configuration file to set the template and the printer name.
+You must set (at least) `LPR_PRINTER` name in `daemon/config.ini`.
+
 ## Usage
 Navigate to the [PartsBox](https://partsbox.com) website, and you should see
 the two buttons on the pages mentioned above. Clicking them will send a request
