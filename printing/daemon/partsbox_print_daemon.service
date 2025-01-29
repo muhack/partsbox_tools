@@ -8,4 +8,4 @@ ExecStart=/usr/bin/python3 <DIRECTORY>/partsbox_print_daemon.py
 Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

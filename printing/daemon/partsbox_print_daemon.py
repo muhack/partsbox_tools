@@ -37,7 +37,7 @@ class Part:
 		'''
 		Get the part ID from a URL
 		'''
-		regex = r'partsbox.com\/.+?\/parts\/(\w{26})(?:\/|)$'
+		regex = r'partsbox.com\/.+?\/parts\/(\w{26})'
 		m = re.search(regex, self.url)
 		if m:
 			return m.group(1)
